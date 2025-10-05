@@ -70,4 +70,8 @@ async function main() {
     });
 }
 
-AppDataSource.initialize().then(redisClient.connect).then(main).catch(console.error);
+AppDataSource.initialize()
+  .then(() => redisClient.connect())
+  .then(() => main())
+  .catch(console.error);
+

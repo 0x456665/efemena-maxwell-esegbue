@@ -17,3 +17,9 @@ redisClient.on("error", (err) => {
 });
 
 export default redisClient;
+
+console.log({
+    port: Settings.REDIS_PORT,
+        password: Settings.REDIS_PASSWORD,
+            database: Settings.REDIS_DB
+})
