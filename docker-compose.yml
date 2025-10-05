@@ -1,0 +1,192 @@
+services:
+    # MySQL Database
+    mysql:
+        image: mysql:8.0.43-bookworm
+        container_name: snapnet_mysql
+        restart: unless-stopped
+        environment:
+            MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+            MYSQL_DATABASE: ${DB_NAME}
+            MYSQL_USER: ${DB_USER}
+            MYSQL_PASSWORD: ${DB_PASSWORD}
+        ports:
+            - "${DB_PORT:-3306}:3306"
+        volumes:
+            - mysql_data:/var/lib/mysql
+            - type: bind
+              source: ./docker/mysql/init.sql
+              target: /docker-entrypoint-initdb.d/init.sql
+              read_only: true
+        networks:
+            - workforce-network
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "mysqladmin",
+                    "ping",
+                    "-h",
+                    "localhost",
+                    "-u",
+                    "root",
+                    "-p${DB_ROOT_PASSWORD}",
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+
+    # Redis Cache
+    redis:
+        image: redis:8.2.2-alpine3.22
+        container_name: snapnet_redis
+        restart: unless-stopped
+        command: redis-server --requirepass ${REDIS_PASSWORD}
+        ports:
+            - "${REDIS_PORT:-6379}:6379"
+        volumes:
+            - redis_data:/data
+        networks:
+            - workforce-network
+        healthcheck:
+            test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # RabbitMQ Message Broker
+    rabbitmq:
+        image: rabbitmq:4.2-rc-management-alpine
+        container_name: snapnet_rabbitmq
+        restart: unless-stopped
+        environment:
+            RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+            RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+        ports:
+            - "${RABBITMQ_PORT:-5672}:5672" # AMQP protocol
+            - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672" # Management UI
+        volumes:
+            - rabbitmq_data:/var/lib/rabbitmq
+            - ./docker/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+        networks:
+            - workforce-network
+        healthcheck:
+            test: ["CMD", "rabbitmq-diagnostics", "ping"]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+
+    # Express API Server
+    api:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: production
+        container_name: snapnet_api
+        restart: unless-stopped
+        env_file:
+            - .env
+        environment:
+            NODE_ENV: ${NODE_ENV:-production}
+            PORT: ${PORT:-3000}
+
+            # Database
+            DB_HOST: mysql
+            DB_PORT: 3306
+            DB_NAME: ${DB_NAME}
+            DB_USER: ${DB_USER}
+            DB_PASSWORD: ${DB_PASSWORD}
+
+            # Redis
+            REDIS_HOST: redis
+            REDIS_PORT: 6379
+            REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+            # RabbitMQ
+            RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/${RABBITMQ_VHOST:-/}
+            RABBITMQ_QUEUE_NAME: ${RABBITMQ_QUEUE_NAME:-leave_requests}
+            RABBITMQ_DLQ_NAME: ${RABBITMQ_DLQ_NAME:-leave_requests_dlq}
+
+            # JWT
+            JWT_SECRET: ${JWT_SECRET}
+            JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+
+            # Rate Limiting
+            RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+            RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+        ports:
+            - "${PORT:-3000}:3000"
+        depends_on:
+            mysql:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+            rabbitmq:
+                condition: service_healthy
+        networks:
+            - workforce-network
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
+        command: npm run start:prod
+
+    # Worker - Queue Consumer
+    worker:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: production
+        container_name: snapnet_worker
+        restart: unless-stopped
+        env_file:
+            - .env
+        environment:
+            NODE_ENV: ${NODE_ENV:-production}
+            WORKER_ID: worker-1
+
+            # Database
+            DB_HOST: mysql
+            DB_PORT: 3306
+            DB_NAME: ${DB_NAME}
+            DB_USER: ${DB_USER}
+            DB_PASSWORD: ${DB_PASSWORD}
+
+            # Redis
+            REDIS_HOST: redis
+            REDIS_PORT: 6379
+            REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+            # RabbitMQ
+            RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/${RABBITMQ_VHOST:-/}
+            RABBITMQ_QUEUE_NAME: ${RABBITMQ_QUEUE_NAME:-leave_requests}
+            RABBITMQ_DLQ_NAME: ${RABBITMQ_DLQ_NAME:-leave_requests_dlq}
+
+            # Retry Strategy
+            MAX_RETRIES: ${MAX_RETRIES:-5}
+            RETRY_BASE_DELAY: ${RETRY_BASE_DELAY:-1000}
+            RETRY_MAX_DELAY: ${RETRY_MAX_DELAY:-60000}
+        depends_on:
+            mysql:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+            rabbitmq:
+                condition: service_healthy
+        networks:
+            - workforce-network
+        command: npm run worker
+
+networks:
+    workforce-network:
+        driver: bridge
+
+volumes:
+    mysql_data:
+        driver: local
+    redis_data:
+        driver: local
+    rabbitmq_data:
+        driver: local

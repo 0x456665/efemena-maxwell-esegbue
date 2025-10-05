@@ -1,0 +1,52 @@
+{
+    "name": "snapnet",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "build": "tsc --build",
+        "start": "node build/src/server.js",
+        "start:prod": "tsoa spec && NODE_ENV=production node build/src/server.js",
+        "test": "jest",
+        "api:spec": "tsoa spec",
+        "api:routes": "tsoa routes",
+        "api:build": "tsoa spec && tsoa routes && tsc --build",
+        "typeorm": "typeorm-ts-node-esm",
+        "worker": "node build/src/worker.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "packageManager": "pnpm@10.17.0",
+    "dependencies": {
+        "@tsoa/runtime": "^6.6.0",
+        "@types/amqplib": "^0.10.7",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.3",
+        "amqplib": "^0.10.9",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^5.1.0",
+        "helmet": "^8.1.0",
+        "joi": "^18.0.1",
+        "mysql2": "^3.15.1",
+        "redis": "^5.8.3",
+        "reflect-metadata": "^0.2.2",
+        "sequelize": "^6.37.7",
+        "swagger-ui-express": "^5.0.1",
+        "tsoa": "^6.6.0",
+        "typeorm": "^0.3.27",
+        "typescript": "^5.9.3"
+    },
+    "devDependencies": {
+        "@types/jest": "^30.0.0",
+        "@types/mocha": "^10.0.10",
+        "@types/supertest": "^6.0.3",
+        "@types/swagger-ui-express": "^4.1.8",
+        "jest": "^30.2.0",
+        "mocha": "^11.7.4",
+        "supertest": "^7.1.4",
+        "ts-jest": "^29.4.4",
+        "ts-node": "^10.9.2"
+    }
+}

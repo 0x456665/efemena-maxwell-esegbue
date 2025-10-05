@@ -1,0 +1,20 @@
+{
+    "entryFile": "src/server.ts",
+    "noImplicitAdditionalProperties": "throw-on-extras",
+    "controllerPathGlobs": ["src/**/*.controller.ts"],
+    "spec": {
+        "outputDirectory": "build",
+        "specVersion": 3,
+        "securityDefinitions": {
+            "idempotency": {
+                "type": "apiKey",
+                "name": "Idempotency-Key",
+                "in": "header"
+            }
+        }
+    },
+    "routes": {
+        "routesDir": "build",
+        "authenticationModule": "./src/middlewares/idempotency.security.middleware.ts"
+    }
+}
